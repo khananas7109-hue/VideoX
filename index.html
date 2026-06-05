@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VideoX">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>VideoX Player</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0a0a0a;color:#fff;font-family:system-ui,sans-serif;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+#screen{position:relative;background:#111;flex:1;overflow:hidden}
+video{width:100%;height:100%;object-fit:contain;display:block}
+#placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#111}
+#placeholder i{font-size:56px;color:#ffffff25}
+#placeholder p{font-size:14px;color:#ffffff50}
+#uploadBtn{background:transparent;border:1px solid #ffffff40;color:#fff;padding:10px 24px;border-radius:24px;font-size:14px;cursor:pointer}
+#fileInput{display:none}
+#overlayBtns{position:absolute;top:12px;left:12px;display:flex;gap:10px;z-index:5}
+.ovBtn{background:#00000080;border:none;color:#fff;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer}
+.ovBtn.active{background:#e74c3c99}
+#lockOverlay{position:absolute;inset:0;background:#00000070;display:none;align-items:center;justify-content:center;z-index:10;flex-direction:column;gap:8px}
+#lockOverlay i{font-size:44px;color:#ffffff80}
+#lockOverlay p{font-size:12px;color:#ffffff60}
+#subBox{position:absolute;bottom:10px;left:8px;right:8px;text-align:center;font-size:15px;color:#fff;text-shadow:0 1px 4px #000;pointer-events:none;line-height:1.4}
+#toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#000000cc;color:#fff;font-size:13px;padding:8px 18px;border-radius:20px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;z-index:20}
+#seekBack,#seekFwd{position:absolute;top:50%;transform:translateY(-50%);width:72px;height:72px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;font-size:11px;color:#fff;background:#ffffff15;border-radius:50%;cursor:pointer;z-index:4}
+#seekBack{left:8%}#seekFwd{right:8%}
+#controls{background:linear-gradient(transparent,#000000dd);padding:8px 14px 16px;position:relative;flex-shrink:0}
+#progressWrap{position:relative;height:5px;background:#ffffff30;border-radius:3px;cursor:pointer;margin-bottom:10px}
+#progressBar{height:100%;background:#e74c3c;border-radius:3px;width:0%;position:relative}
+#progressBar::after{content:'';position:absolute;right:-7px;top:-5px;width:14px;height:14px;background:#fff;border-radius:50%}
+#bufferBar{position:absolute;top:0;left:0;height:100%;background:#ffffff25;border-radius:3px;width:0%;pointer-events:none}
+#row1{display:flex;align-items:center;gap:6px}
+.ctrl{background:none;border:none;color:#fff;padding:6px;font-size:22px;display:flex;align-items:center}
+#volWrap{display:flex;align-items:center;gap:6px;flex:1}
+#volSlider{flex:1;accent-color:#e74c3c;height:4px}
+#timeDisp{font-size:11px;color:#ffffffbb;white-space:nowrap}
+#speedSel{background:#ffffff18;border:none;color:#fff;font-size:12px;border-radius:6px;padding:4px 6px}
+#speedSel option{background:#222}
+#row2{display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+#row2::-webkit-scrollbar{display:none}
+.tag{background:#ffffff12;border:0.5px solid #ffffff25;color:#ffffffbb;font-size:11px;padding:5px 12px;border-radius:20px;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.tag.on{background:#e74c3c40;border-color:#e74c3c}
+#subFile{display:none}
+#pipStatus{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#111;color:#fff;font-size:13px;gap:10px;flex-direction:column}
+#pipStatus i{font-size:40px;color:#e74c3c}
+</style>
+</head>
+<body>
+
+<div id="screen">
+  <video id="videoEl" playsinline preload="metadata" style="display:none"></video>
+  <div id="placeholder">
+    <i class="ti ti-player-play"></i>
+    <p>Koi video select karein</p>
+    <button id="uploadBtn" onclick="document.getElementById('fileInput').click()">
+      <i class="ti ti-upload"></i> File Kholo
+    </button>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+  <div id="lockOverlay">
+    <i class="ti ti-lock"></i>
+    <p>Tap karke unlock karein</p>
+  </div>
+  <div id="pipStatus"><i class="ti ti-picture-in-picture"></i><span>PiP Active</span></div>
+  <div id="seekBack"><i class="ti ti-rewind" style="font-size:20px"></i>-10s</div>
+  <div id="seekFwd"><i class="ti ti-fast-forward" style="font-size:20px"></i>+10s</div>
+  <div id="subBox"></div>
+  <div id="overlayBtns">
+    <button class="ovBtn" id="lockBtn"><i class="ti ti-lock"></i></button>
+    <button class="ovBtn" id="pipBtn"><i class="ti ti-picture-in-picture"></i></button>
+    <button class="ovBtn" id="subBtn" onclick="document.getElementById('subFile').click()"><i class="ti ti-subtitles"></i></button>
+    <input type="file" id="subFile" accept=".srt">
+  </div>
+  <div id="toast"></div>
+</div>
+
+<div id="controls">
+  <div id="progressWrap">
+    <div id="bufferBar"></div>
+    <div id="progressBar"></div>
+  </div>
+  <div id="row1">
+    <button class="ctrl" id="playBtn"><i class="ti ti-player-play"></i></button>
+    <div id="volWrap">
+      <button class="ctrl" id="muteBtn"><i class="ti ti-volume"></i></button>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1">
+    </div>
+    <span id="timeDisp">0:00 / 0:00</span>
+    <select id="speedSel">
+      <option value="0.5">0.5x</option>
+      <option value="0.75">0.75x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.25">1.25x</option>
+      <option value="1.5">1.5x</option>
+      <option value="2">2x</option>
+    </select>
+    <button class="ctrl" id="fsBtn"><i class="ti ti-maximize"></i></button>
+  </div>
+  <div id="row2">
+    <span class="tag" id="fitBtn">Fit</span>
+    <span class="tag" id="fillBtn">Fill</span>
+    <span class="tag" id="stretchBtn">Stretch</span>
+    <span class="tag" id="rotBtn"><i class="ti ti-rotate-clockwise"></i> Rotate</span>
+    <span class="tag" id="flipBtn"><i class="ti ti-flip-horizontal"></i> Flip</span>
+    <span class="tag" id="brtUp"><i class="ti ti-sun"></i> +Bright</span>
+    <span class="tag" id="brtDn"><i class="ti ti-moon"></i> -Bright</span>
+  </div>
+</div>
+
+<script>
+const vid=document.getElementById('videoEl'),
+  playBtn=document.getElementById('playBtn'),
+  muteBtn=document.getElementById('muteBtn'),
+  volSlider=document.getElementById('volSlider'),
+  progressWrap=document.getElementById('progressWrap'),
+  progressBar=document.getElementById('progressBar'),
+  bufferBar=document.getElementById('bufferBar'),
+  timeDisp=document.getElementById('timeDisp'),
+  speedSel=document.getElementById('speedSel'),
+  fsBtn=document.getElementById('fsBtn'),
+  subBox=document.getElementById('subBox'),
+  toast=document.getElementById('toast'),
+  lockOverlay=document.getElementById('lockOverlay'),
+  lockBtn=document.getElementById('lockBtn'),
+  pipBtn=document.getElementById('pipBtn'),
+  pipStatus=document.getElementById('pipStatus'),
+  placeholder=document.getElementById('placeholder'),
+  screen=document.getElementById('screen');
+
+let locked=false,bright=1,rotation=0,flipped=false,subtitles=[],toastTimer;
+
+function fmt(s){let m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec}
+function showToast(msg){clearTimeout(toastTimer);toast.textContent=msg;toast.style.opacity=1;toastTimer=setTimeout(()=>toast.style.opacity=0,1500)}
+function updateFilter(){vid.style.transform='rotate('+rotation+'deg) scaleX('+(flipped?-1:1)+')';vid.style.filter='brightness('+bright+')'}
+function updatePlayBtn(){playBtn.innerHTML=vid.paused?'<i class="ti ti-player-play"></i>':'<i class="ti ti-player-pause"></i>'}
+
+document.getElementById('fileInput').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  vid.src=URL.createObjectURL(f);
+  vid.style.display='block';placeholder.style.display='none';
+  vid.play();updatePlayBtn();showToast('▶ '+f.name.substring(0,25));
+});
+
+playBtn.onclick=()=>{if(locked)return;vid.paused?vid.play():vid.pause();updatePlayBtn()};
+vid.onclick=()=>{if(locked)return;vid.paused?vid.play():vid.pause();updatePlayBtn()};
+vid.addEventListener('timeupdate',()=>{
+  if(!vid.duration)return;
+  progressBar.style.width=(vid.currentTime/vid.duration*100)+'%';
+  timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);
+  renderSub(vid.currentTime);
+});
+vid.addEventListener('progress',()=>{
+  if(vid.buffered.length)bufferBar.style.width=(vid.buffered.end(vid.buffered.length-1)/vid.duration*100)+'%';
+});
+vid.addEventListener('ended',updatePlayBtn);
+
+progressWrap.addEventListener('click',e=>{
+  if(locked)return;
+  let r=progressWrap.getBoundingClientRect();
+  vid.currentTime=(e.clientX-r.left)/r.width*vid.duration;
+});
+
+muteBtn.onclick=()=>{vid.muted=!vid.muted;muteBtn.innerHTML=vid.muted?'<i class="ti ti-volume-off"></i>':'<i class="ti ti-volume"></i>'};
+volSlider.oninput=()=>{vid.volume=volSlider.value};
+speedSel.onchange=()=>{vid.playbackRate=parseFloat(speedSel.value);showToast('Speed: '+speedSel.value+'x')};
+fsBtn.onclick=()=>{
+  const el=document.documentElement;
+  if(!document.fullscreenElement){el.requestFullscreen?.();}
+  else{document.exitFullscreen?.();}
+};
+
+document.getElementById('seekBack').onclick=()=>{if(locked)return;vid.currentTime=Math.max(0,vid.currentTime-10);showToast('-10s')};
+document.getElementById('seekFwd').onclick=()=>{if(locked)return;vid.currentTime=Math.min(vid.duration||0,vid.currentTime+10);showToast('+10s')};
+
+lockBtn.onclick=()=>{locked=!locked;lockOverlay.style.display=locked?'flex':'none';lockBtn.classList.toggle('active',locked);showToast(locked?'🔒 Locked':'🔓 Unlocked')};
+lockOverlay.onclick=()=>{locked=false;lockOverlay.style.display='none';lockBtn.classList.remove('active');showToast('🔓 Unlocked')};
+
+pipBtn.onclick=async()=>{
+  if(!vid.src){showToast('Pehle video load karein');return;}
+  try{if(document.pictureInPictureElement){await document.exitPictureInPicture();pipStatus.style.display='none'}
+  else{await vid.requestPictureInPicture();pipStatus.style.display='flex'}}
+  catch(e){showToast('PiP not supported')}
+};
+vid.addEventListener('leavepictureinpicture',()=>pipStatus.style.display='none');
+
+document.getElementById('fitBtn').onclick=()=>{vid.style.objectFit='contain';showToast('Fit mode')};
+document.getElementById('fillBtn').onclick=()=>{vid.style.objectFit='cover';showToast('Fill mode')};
+document.getElementById('stretchBtn').onclick=()=>{vid.style.objectFit='fill';showToast('Stretch mode')};
+document.getElementById('rotBtn').onclick=()=>{rotation=(rotation+90)%360;updateFilter();showToast('Rotate '+rotation+'°')};
+document.getElementById('flipBtn').onclick=()=>{flipped=!flipped;updateFilter();showToast(flipped?'Flipped':'Normal')};
+document.getElementById('brtUp').onclick=()=>{bright=Math.min(2,+(bright+0.1).toFixed(1));updateFilter();showToast('Brightness: '+Math.round(bright*100)+'%')};
+document.getElementById('brtDn').onclick=()=>{bright=Math.max(0.1,+(bright-0.1).toFixed(1));updateFilter();showToast('Brightness: '+Math.round(bright*100)+'%')};
+
+document.getElementById('subFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>parseSRT(ev.target.result);r.readAsText(f);
+});
+function parseSRT(txt){
+  subtitles=[];
+  txt.trim().split(/\n\n+/).forEach(b=>{
+    const lines=b.trim().split('\n');if(lines.length<3)return;
+    const t=lines[1].match(/(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)/);
+    if(!t)return;
+    subtitles.push({start:+t[1]*3600+ +t[2]*60+ +t[3]+ +t[4]/1000,end:+t[5]*3600+ +t[6]*60+ +t[7]+ +t[8]/1000,text:lines.slice(2).join('\n')});
+  });
+  showToast('Subtitles loaded ✓');
+}
+function renderSub(ct){const s=subtitles.find(s=>ct>=s.start&&ct<=s.end);subBox.textContent=s?s.text:''}
+
+let tx,ty,tt,tv;
+screen.addEventListener('touchstart',e=>{
+  if(locked)return;tx=e.touches[0].clientX;ty=e.touches[0].clientY;tt=vid.currentTime;tv=vid.volume;
+},{passive:true});
+screen.addEventListener('touchmove',e=>{
+  if(locked||!vid.src)return;
+  const dx=e.touches[0].clientX-tx,dy=e.touches[0].clientY-ty;
+  if(Math.abs(dy)>Math.abs(dx)){vid.volume=Math.min(1,Math.max(0,tv-(dy/150)));volSlider.value=vid.volume;showToast('Vol: '+Math.round(vid.volume*100)+'%')}
+  else{vid.currentTime=Math.min(vid.duration||0,Math.max(0,tt+dx/5));showToast(fmt(vid.currentTime))}
+},{passive:true});
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+    </html>
